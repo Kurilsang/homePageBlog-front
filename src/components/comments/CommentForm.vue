@@ -11,6 +11,7 @@
         v-model="author" 
         class="rpg-input"
         placeholder="请输入您的昵称"
+        :disabled="isLoggedIn"
       />
     </div>
     
@@ -54,11 +55,15 @@
     <div class="form-notice success" v-if="submitSuccess">
       <p>评论提交成功，等待审核后显示</p>
     </div>
+    
+    <div class="form-notice error" v-if="error">
+      <p>{{ errorMessage }}</p>
+    </div>
   </div>
 </template>
 
 <script>
-import store from '@/store';
+import { commentAPI, authAPI } from '@/api';
 
 export default {
   name: 'CommentForm',
@@ -78,21 +83,37 @@ export default {
       content: '',
       isSending: false,
       submitSuccess: false,
-      storeInstance: store.getStore()
+      error: false,
+      errorMessage: ''
     };
   },
   computed: {
     isValid() {
       return this.author.trim() && this.content.trim();
+    },
+    // 检查用户是否已登录
+    isLoggedIn() {
+      return authAPI.isAuthenticated();
+    },
+    // 获取当前用户信息
+    currentUser() {
+      return authAPI.getCurrentUser();
+    }
+  },
+  mounted() {
+    // 如果用户已登录，使用用户的昵称自动填充
+    if (this.isLoggedIn && this.currentUser) {
+      this.author = this.currentUser.nickname || this.currentUser.username;
     }
   },
   methods: {
     // 提交评论
-    submitComment() {
+    async submitComment() {
       if (!this.isValid || this.isSending) return;
       
       this.isSending = true;
       this.submitSuccess = false;
+      this.error = false;
       
       // 构造评论数据
       const commentData = {
@@ -100,20 +121,19 @@ export default {
         parentId: this.parentId,
         author: this.author.trim(),
         content: this.content.trim(),
-        avatar: '/images/avatars/default-avatar.jpg' // 使用默认头像
+        // 如果用户已登录，使用用户ID，否则为空
+        userId: this.isLoggedIn ? this.currentUser.id : null
       };
       
-      // 模拟提交API请求
-      setTimeout(() => {
-        // 添加评论到Store
-        this.storeInstance.addComment(commentData);
+      try {
+        // 调用API提交评论
+        await commentAPI.addComment(commentData);
         
         // 重置表单
         this.resetForm();
         
         // 显示成功提示
         this.submitSuccess = true;
-        this.isSending = false;
         
         // 发出提交成功事件
         this.$emit('submit', commentData);
@@ -122,12 +142,21 @@ export default {
         setTimeout(() => {
           this.submitSuccess = false;
         }, 3000);
-      }, 800);
+      } catch (error) {
+        console.error('提交评论失败:', error);
+        this.error = true;
+        this.errorMessage = error.message || '评论提交失败，请稍后重试';
+      } finally {
+        this.isSending = false;
+      }
     },
     
     // 重置表单
     resetForm() {
+      // 如果用户已登录，保留用户名，否则清空
+      if (!this.isLoggedIn) {
       this.author = '';
+      }
       this.content = '';
     },
     
@@ -287,6 +316,11 @@ label {
   &.success {
     background-color: rgba(0, 200, 83, 0.2);
     color: #80ffb0;
+  }
+  
+  &.error {
+    background-color: rgba(255, 88, 88, 0.2);
+    color: #ff7a7a;
   }
   
   p {

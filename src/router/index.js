@@ -94,15 +94,25 @@ router.beforeEach((to, from, next) => {
   if (to.matched.some(record => record.meta.requiresAuth)) {
     // 检查是否已登录
     if (!localStorage.getItem('admin_logged_in')) {
+      // 使用next方法代替push方法重定向
       next({
         path: '/admin',
         query: { redirect: to.fullPath }
-      })
+      });
     } else {
-      next()
+      next();
     }
   } else {
-    next()
+    // 对于管理员登录页面的特殊处理
+    if (to.path === '/admin' && localStorage.getItem('admin_logged_in')) {
+      // 如果已登录，有重定向参数则跳到重定向地址，否则前往dashboard
+      const redirect = to.query.redirect || '/admin/dashboard';
+      
+      // 使用replace避免导航历史堆栈问题
+      next({ path: redirect, replace: true });
+    } else {
+      next();
+    }
   }
 })
 

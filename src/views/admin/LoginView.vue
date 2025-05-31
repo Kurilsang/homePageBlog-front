@@ -63,6 +63,8 @@
 
 <script>
 import MusicPlayerComponent from '@/components/MusicPlayerComponent.vue';
+import { authAPI } from '@/api';
+import { doAdminLogin, handleAdminRedirect } from '@/utils/authHelper';
 
 export default {
   name: 'LoginView',
@@ -83,9 +85,15 @@ export default {
     setTimeout(() => {
       this.isVisible = true;
     }, 200);
+    
+    // 如果已经登录，直接跳转到控制台
+    if (authAPI.isAdmin()) {
+      const redirectPath = this.$route.query.redirect || '/admin/dashboard';
+      handleAdminRedirect(redirectPath);
+    }
   },
   methods: {
-    handleLogin() {
+    async handleLogin() {
       this.errorMsg = '';
       
       if (!this.username || !this.password) {
@@ -95,22 +103,19 @@ export default {
       
       this.isLoading = true;
       
-      // 模拟登录请求
-      setTimeout(() => {
-        // 简单的验证，实际应该使用API
-        if (this.username === 'admin' && this.password === '123456') {
-          // 登录成功
-          localStorage.setItem('admin_logged_in', 'true');
-          image.png
-          // 如果有重定向参数，则重定向到该路径
-          const redirectPath = this.$route.query.redirect || '/admin/dashboard';
-          this.$router.push(redirectPath);
-        } else {
-          // 登录失败
-          this.errorMsg = '用户名或密码错误';
-          this.isLoading = false;
-        }
-      }, 1000);
+      try {
+        // 使用辅助函数处理登录
+        await doAdminLogin(this.username, this.password);
+        
+        // 登录成功后重定向
+        const redirectPath = this.$route.query.redirect || '/admin/dashboard';
+        handleAdminRedirect(redirectPath);
+      } catch (error) {
+        console.error('登录失败:', error);
+        this.errorMsg = error.message || '用户名或密码错误';
+      } finally {
+        this.isLoading = false;
+      }
     },
     
     goToHome() {

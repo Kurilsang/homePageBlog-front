@@ -24,18 +24,25 @@
             <div class="avatar-controls">
               <p class="control-info">上传新头像 (建议尺寸: 200x200px)</p>
               
-              <label for="avatar-upload" class="rpg-button upload-button">
-                选择图片
+              <label for="avatar-upload" class="rpg-button upload-button" :class="{'uploading': isUploading}">
+                <span v-if="isUploading">上传中...</span>
+                <span v-else>选择图片</span>
                 <input 
                   type="file" 
                   id="avatar-upload" 
                   @change="handleAvatarUpload" 
                   accept="image/*" 
                   class="file-input"
+                  :disabled="isUploading"
                 />
               </label>
               
-              <p class="upload-note">目前此功能仅为演示，不会实际上传文件。</p>
+              <p class="upload-note">上传成功后头像将自动保存到服务器</p>
+              
+              <!-- 上传错误提示 -->
+              <div class="upload-error" v-if="errorMsg">
+                <span class="error-icon">!</span> {{ errorMsg }}
+              </div>
             </div>
           </div>
         </div>
@@ -69,7 +76,7 @@
               placeholder="请输入个人简介"
               rows="5"
             ></textarea>
-            <div class="char-counter">{{ profile.description.length }}/200 字符</div>
+            <div class="char-counter">{{ profile.description ? profile.description.length : 0 }}/200 字符</div>
           </div>
         </div>
         
@@ -91,6 +98,11 @@
         <!-- 保存成功提示 -->
         <div class="success-message" v-if="showSuccess">
           保存成功！
+        </div>
+
+        <!-- 错误提示 -->
+        <div class="error-message" v-if="errorMsg">
+          {{ errorMsg }}
         </div>
       </div>
       
@@ -129,14 +141,14 @@
 </template>
 
 <script>
-import store from '@/store';
+import { profileAPI, uploadAPI } from '@/api';
+import { UPLOAD_DIRECTORY } from '@/constant/constants';
 
 export default {
   name: 'AdminProfileView',
   data() {
     return {
       isVisible: false,
-      storeInstance: store.getStore(),
       profile: {
         avatar: '',
         title: '',
@@ -148,14 +160,48 @@ export default {
         description: ''
       },
       isSaving: false,
-      showSuccess: false
+      isLoading: false,
+      showSuccess: false,
+      errorMsg: '',
+      isUploading: false
     };
   },
-  created() {
-    // 获取当前个人资料
-    const currentProfile = this.storeInstance.profile;
-    this.profile = { ...currentProfile };
-    this.originalProfile = { ...currentProfile };
+  async created() {
+    // 从API获取当前个人资料
+    this.isLoading = true;
+    try {
+      const response = await profileAPI.getProfile();
+      
+      // 检查API返回格式
+      if (response && response.code === 0 && response.data) {
+        this.profile = { ...response.data };
+      } else if (response && response.data) {
+        // 兼容无code的返回格式
+        this.profile = { ...response.data };
+      } else {
+        // 使用默认值
+        this.profile = {
+          avatar: '',
+          title: '像素冒险家',
+          description: '在这里显示个人简介...'
+        };
+      }
+      
+      // 保存原始数据用于重置
+      this.originalProfile = { ...this.profile };
+    } catch (error) {
+      console.error('获取个人资料失败:', error);
+      this.errorMsg = '获取个人资料失败，请刷新页面重试';
+      // 使用默认值
+      this.profile = {
+        avatar: '',
+        title: '像素冒险家',
+        description: '在这里显示个人简介...'
+      };
+      this.originalProfile = { ...this.profile };
+    } finally {
+      this.isLoading = false;
+    }
   },
   mounted() {
     // 组件挂载后等待200ms再开始动画
@@ -165,51 +211,98 @@ export default {
   },
   methods: {
     // 处理头像上传
-    handleAvatarUpload(event) {
+    async handleAvatarUpload(event) {
       const file = event.target.files[0];
       if (!file) return;
       
       // 检查文件类型
       if (!file.type.match('image.*')) {
-        alert('请选择图片文件');
+        this.errorMsg = '请选择图片文件';
         return;
       }
       
-      // 读取文件并预览
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        this.profile.avatar = e.target.result;
-      };
-      reader.readAsDataURL(file);
+      // 显示上传状态
+      this.isUploading = true;
+      this.errorMsg = '';
+      
+      try {
+        // 调用上传API
+        const response = await uploadAPI.uploadImage(file, UPLOAD_DIRECTORY.AVATAR);
+        
+        // 检查返回结果
+        if (response && response.code === 0 && response.data) {
+          // 更新头像URL
+          this.profile.avatar = response.data.url;
+          // 清除错误信息
+          this.errorMsg = '';
+        } else {
+          // 显示错误信息
+          this.errorMsg = response.message || '上传失败，请稍后重试';
+          
+          // 仍然预览本地图片（仅预览）
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            this.profile.avatar = e.target.result;
+          };
+          reader.readAsDataURL(file);
+        }
+      } catch (error) {
+        console.error('上传头像失败:', error);
+        this.errorMsg = error.message || '上传失败，请稍后重试';
+        
+        // 本地预览
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          this.profile.avatar = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      } finally {
+        this.isUploading = false;
+      }
     },
     
     // 保存个人资料
-    saveProfile() {
+    async saveProfile() {
       this.isSaving = true;
       this.showSuccess = false;
+      this.errorMsg = '';
       
-      // 模拟API保存请求
-      setTimeout(() => {
-        // 保存到store
-        this.storeInstance.updateProfile(this.profile);
+      try {
+        // 调用API保存个人资料
+        const response = await profileAPI.updateProfile({
+          title: this.profile.title,
+          description: this.profile.description,
+          // 暂时不处理头像上传
+          avatar: this.profile.avatar
+        });
         
-        // 更新本地记录
-        this.originalProfile = { ...this.profile };
-        
-        // 显示成功提示
-        this.showSuccess = true;
+        // 检查返回结果
+        if (response && (response.code === 0 || response.success)) {
+          // 更新本地记录
+          this.originalProfile = { ...this.profile };
+          
+          // 显示成功提示
+          this.showSuccess = true;
+          
+          // 3秒后隐藏成功提示
+          setTimeout(() => {
+            this.showSuccess = false;
+          }, 3000);
+        } else {
+          this.errorMsg = response.message || '保存失败，请稍后重试';
+        }
+      } catch (error) {
+        console.error('保存个人资料失败:', error);
+        this.errorMsg = error.message || '保存失败，请稍后重试';
+      } finally {
         this.isSaving = false;
-        
-        // 3秒后隐藏成功提示
-        setTimeout(() => {
-          this.showSuccess = false;
-        }, 3000);
-      }, 1000);
+      }
     },
     
     // 重置为原始数据
     resetProfile() {
       this.profile = { ...this.originalProfile };
+      this.errorMsg = '';
     }
   }
 };
@@ -316,6 +409,22 @@ export default {
   position: relative;
   cursor: pointer;
   padding: 10px 15px;
+  
+  &.uploading {
+    background-color: rgba(58, 142, 169, 0.3);
+    cursor: not-allowed;
+    
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      height: 4px;
+      background: var(--accent-color);
+      animation: loading-bar 1.5s infinite linear;
+      width: 30%;
+    }
+  }
 }
 
 .file-input {
@@ -333,6 +442,30 @@ export default {
   font-size: 12px;
   font-style: italic;
   margin-top: 10px;
+}
+
+.upload-error {
+  margin-top: 10px;
+  padding: 8px 10px;
+  background-color: rgba(255, 76, 76, 0.2);
+  border-left: var(--pixel-size) solid #ff4c4c;
+  color: #ff9e9e;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  
+  .error-icon {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    text-align: center;
+    line-height: 16px;
+    border-radius: 50%;
+    background-color: #ff4c4c;
+    color: #fff;
+    font-weight: bold;
+    margin-right: 8px;
+  }
 }
 
 .form-group {
@@ -497,5 +630,20 @@ label {
 
 .preview-description {
   margin: 0;
+}
+
+.error-message {
+  margin-top: 15px;
+  padding: 10px;
+  background-color: rgba(255, 76, 76, 0.2);
+  border: var(--pixel-size) solid #ff4c4c;
+  color: #ff9e9e;
+  text-align: center;
+  animation: error-pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes error-pop {
+  0% { transform: scale(0.8); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
 }
 </style> 

@@ -76,6 +76,7 @@
 
 <script>
 import MusicPlayerComponent from '@/components/MusicPlayerComponent.vue';
+import { doAdminLogout } from '@/utils/authHelper';
 
 export default {
   name: 'DashboardView',
@@ -115,11 +116,17 @@ export default {
       document.body.style.overflow = '';
     },
     
-    handleLogout() {
+    async handleLogout() {
       // 显示确认对话框
       if (confirm('确定要退出登录吗？')) {
-        localStorage.removeItem('admin_logged_in');
-        this.$router.push('/admin');
+        try {
+          // 使用辅助函数处理登出
+          await doAdminLogout();
+        } catch (error) {
+          console.error('登出失败:', error);
+          // 即使API调用失败，也强制退出
+          window.location.href = '/admin';
+        }
       }
     },
     

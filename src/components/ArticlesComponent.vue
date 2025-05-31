@@ -2,9 +2,22 @@
   <div class="articles-container">
     <div class="rpg-menu-box articles-box" :class="{'appear': isVisible}">
       <h2 class="rpg-heading menu-title" :class="{'slide-in': isVisible}">冒险日志</h2>
-      <div class="menu-items">
+      
+      <!-- 加载中状态 -->
+      <div v-if="loading" class="loading-state">
+        <p>正在加载文章...</p>
+      </div>
+      
+      <!-- 错误状态 -->
+      <div v-else-if="error" class="error-state">
+        <p>{{ errorMessage }}</p>
+        <button class="retry-button" @click="loadArticles">重试</button>
+      </div>
+      
+      <!-- 内容正常显示 -->
+      <div v-else class="menu-items">
         <div v-for="(post, index) in blogPosts" 
-             :key="index" 
+             :key="post.id" 
              class="menu-item"
              :class="{ 
                'selected': index === selectedPost,
@@ -25,6 +38,11 @@
           </div>
           <div class="pixel-tag" v-if="post.tag">{{ post.tag }}</div>
         </div>
+        
+        <!-- 没有文章时显示 -->
+        <div v-if="blogPosts.length === 0" class="empty-state">
+          <p>暂无文章</p>
+        </div>
       </div>
       <div class="pixel-corner top-left"></div>
       <div class="pixel-corner top-right"></div>
@@ -35,47 +53,55 @@
 </template>
 
 <script>
+import { articleAPI } from '@/api';
+
 export default {
   name: 'ArticlesComponent',
   data() {
     return {
       selectedPost: 0,
       isVisible: false,
-      blogPosts: [
-        {
-          id: 1,
-          title: '像素艺术创作技巧',
-          summary: '探索像素艺术的基础技巧，从基本形状到高级着色方法，帮助你创建令人惊叹的8位风格插图。',
-          coverImage: '/images/blog/pixel-art.jpg',
-          date: '2024-03-20',
-          tag: '艺术'
-        },
-        {
-          id: 2,
-          title: '复古游戏开发笔记',
-          summary: '记录使用现代工具开发具有复古风格游戏的过程，包括游戏机制设计和像素完美的界面实现。',
-          coverImage: '/images/blog/retro-game.jpg',
-          date: '2024-03-15',
-          tag: '开发'
-        },
-        {
-          id: 3,
-          title: '8-bit音乐合成指南',
-          summary: '学习如何创作令人怀旧的8位音乐，从基础的声波形式到创建完整的复古游戏配乐。',
-          coverImage: '/images/blog/8bit-music.jpg',
-          date: '2024-03-10',
-          tag: '音乐'
-        }
-      ]
+      blogPosts: [],
+      loading: true,
+      error: false,
+      errorMessage: '加载文章失败，请稍后重试'
     }
   },
-  mounted() {
-    // 组件挂载后等待200ms再开始动画
+  async mounted() {
+    // 先显示组件，再加载数据
     setTimeout(() => {
       this.isVisible = true;
     }, 200);
+    
+    // 加载文章数据
+    await this.loadArticles();
   },
   methods: {
+    async loadArticles() {
+      this.loading = true;
+      this.error = false;
+      
+      try {
+        // 获取文章列表，优先显示置顶文章
+        const response = await articleAPI.getArticles({ 
+          page: 1, 
+          pageSize: 10
+        });
+        
+        if (response && response.articles) {
+          this.blogPosts = response.articles;
+        } else {
+          throw new Error('获取文章失败');
+        }
+      } catch (error) {
+        console.error('加载文章列表失败:', error);
+        this.error = true;
+        this.errorMessage = '加载文章失败，请稍后重试';
+      } finally {
+        this.loading = false;
+      }
+    },
+    
     selectPost(index) {
       // 添加选择效果音效或动画逻辑
       const prevSelected = this.selectedPost;
@@ -175,6 +201,30 @@ export default {
   }
 }
 
+// 加载和错误状态样式
+.loading-state, .error-state, .empty-state {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-color);
+  background-color: rgba(20, 20, 80, 0.6);
+  border-radius: 2px;
+}
+
+.retry-button {
+  background-color: var(--highlight-color);
+  color: var(--primary-color);
+  border: none;
+  padding: 8px 16px;
+  margin-top: 10px;
+  cursor: pointer;
+  font-family: inherit;
+  border-radius: 2px;
+  
+  &:hover {
+    filter: brightness(1.1);
+  }
+}
+
 @keyframes menu-item-appear {
   0% {
     opacity: 0;
@@ -198,13 +248,13 @@ export default {
   top: 50%;
   transform: translateY(-50%);
   font-size: 14px;
-  animation: blink 0.8s infinite;
   color: var(--highlight-color);
+  animation: cursor-blink 1s infinite;
 }
 
-@keyframes blink {
+@keyframes cursor-blink {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+  50% { opacity: 0.5; }
 }
 
 .item-content {
@@ -213,74 +263,65 @@ export default {
 }
 
 .item-cover {
+  width: 80px;
+  height: 80px;
   flex-shrink: 0;
-  width: 100px;
-  height: 100px;
-  overflow: hidden;
   border: var(--pixel-size) solid var(--highlight-color);
+  overflow: hidden;
 }
 
 .cover-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.3s ease;
-  
-  .menu-item:hover & {
-    transform: scale(1.1);
-  }
 }
 
 .item-info {
   flex-grow: 1;
-  display: flex;
-  flex-direction: column;
 }
 
 .item-title {
-  font-size: 18px;
-  margin: 0 0 8px 0;
-  color: var(--highlight-color);
+  font-size: 16px;
+  color: var(--accent-color);
+  margin-bottom: 8px;
 }
 
 .item-summary {
   font-size: 14px;
-  color: #a9b7d0;
-  margin: 0 0 10px 0;
-  line-height: 1.4;
+  color: var(--text-color);
+  margin-bottom: 10px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .item-date {
   font-size: 12px;
-  color: var(--accent-color);
-  margin: auto 0 0 0;
+  color: var(--muted-color);
 }
 
 .pixel-tag {
   position: absolute;
-  top: 5px;
-  right: 5px;
-  background-color: var(--accent-color);
-  color: var(--dark-color);
+  top: 10px;
+  right: 10px;
   font-size: 12px;
-  padding: 3px 8px;
-  border: var(--pixel-size) solid var(--highlight-color);
-  animation: tag-pulse 2s infinite;
+  background-color: var(--highlight-color);
+  color: var(--primary-color);
+  padding: 2px 8px;
+  border: var(--pixel-border);
 }
 
-@keyframes tag-pulse {
-  0%, 100% { 
-    transform: scale(1); 
-    filter: brightness(1);
+/* 响应式 */
+@media (max-width: 600px) {
+  .item-content {
+    flex-direction: column;
+    gap: 10px;
   }
-  50% { 
-    transform: scale(1.05); 
-    filter: brightness(1.2);
+  
+  .item-cover {
+    width: 100%;
+    height: 150px;
   }
 }
 </style> 

@@ -7,7 +7,7 @@
              @mouseenter="avatarHover = true" 
              @mouseleave="avatarHover = false"
              @click="handleAvatarClick">
-          <img src="../assets/avatar.png" alt="头像" class="rpg-avatar" :class="{'avatar-pulse': avatarHover}">
+          <img :src="profileData.avatar || '../assets/avatar.png'" alt="头像" class="rpg-avatar" :class="{'avatar-pulse': avatarHover}">
           <div class="pixel-corner top-left"></div>
           <div class="pixel-corner top-right"></div>
           <div class="pixel-corner bottom-left"></div>
@@ -15,7 +15,7 @@
         </div>
         <div class="profile-title">
           <h1 class="rpg-title" :class="{'text-animate': isVisible, 'secret-text': secretMode}">
-            <span v-for="(char, index) in title" 
+            <span v-for="(char, index) in profileData.title" 
                   :key="index" 
                   :style="{ 'animation-delay': `${index * 0.08 + 0.5}s` }"
                   class="hover-glow">
@@ -50,14 +50,20 @@
 </template>
 
 <script>
+import { profileAPI } from '@/api';
+
 export default {
   name: 'ProfileComponent',
   data() {
     return {
       isVisible: false,
       avatarHover: false,
-      title: '像素冒险家',
-      fullText: '我是一名热爱像素艺术和编程的开发者，专注于创造有趣且独特的交互体验。在这个8-bit风格的世界里，我记录着我的冒险与发现。',
+      profileData: {
+        title: '像素冒险家',  // 默认值，加载完成后会被替换
+        avatar: '',
+        description: ''
+      },
+      fullText: '',
       displayedText: '',
       typingIndex: 0,
       typingSpeed: 50, // 打字速度(ms)
@@ -65,21 +71,57 @@ export default {
       typingTimeout: null,
       clickCount: 0,
       secretMode: false,
-      easterEggTimeout: null
+      easterEggTimeout: null,
+      loading: true
     }
   },
-  mounted() {
+  async mounted() {
+    // 尝试从API获取个人资料
+    try {
+      const profileData = await profileAPI.getProfile();
+      console.log(profileData);
+      // 如果数据存在才进行赋值，否则使用默认值
+      if (profileData && profileData.data) {
+        this.profileData = profileData.data;
+        this.fullText = profileData.data.description || '我是一名热爱像素艺术和编程的开发者，专注于创造有趣且独特的交互体验。在这个8-bit风格的世界里，我记录着我的冒险与发现。';
+      } else {
+        // 后端返回无效数据时使用默认值
+        this.profileData = {
+          title: '像素冒险家',
+          avatar: require('@/assets/avatar.png'),
+          description: '我是一名热爱像素艺术和编程的开发者，专注于创造有趣且独特的交互体验。在这个8-bit风格的世界里，我记录着我的冒险与发现。'
+        };
+        this.fullText = this.profileData.description;
+      }
+    } catch (error) {
+      console.error('获取个人资料失败:', error);
+      // 使用默认值
+      this.profileData = {
+        title: '像素冒险家',
+        avatar: require('@/assets/avatar.png'),
+        description: '我是一名热爱像素艺术和编程的开发者，专注于创造有趣且独特的交互体验。在这个8-bit风格的世界里，我记录着我的冒险与发现。'
+      };
+      this.fullText = this.profileData.description;
+    } finally {
+      this.loading = false;
+      
     // 组件挂载后等待300ms再开始动画
     setTimeout(() => {
       this.isVisible = true;
       this.startTyping();
     }, 300);
+    }
   },
   methods: {
     startTyping() {
       // 清除之前可能存在的计时器
       if (this.typingTimeout) {
         clearTimeout(this.typingTimeout);
+      }
+      
+      // 确保fullText始终有值
+      if (!this.fullText) {
+        this.fullText = '我是一名热爱像素艺术和编程的开发者，专注于创造有趣且独特的交互体验。在这个8-bit风格的世界里，我记录着我的冒险与发现。';
       }
       
       // 重置打字相关状态
@@ -91,14 +133,15 @@ export default {
       this.typeNextChar();
     },
     typeNextChar() {
-      if (this.typingIndex < this.fullText.length) {
-        this.displayedText += this.fullText.charAt(this.typingIndex);
-        this.typingIndex++;
-        this.typingTimeout = setTimeout(this.typeNextChar, this.typingSpeed);
-      } else {
-        // 打字完成
+      // 再次确保fullText存在
+      if (!this.fullText || this.typingIndex >= this.fullText.length) {
         this.isTypingComplete = true;
+        return;
       }
+      
+      this.displayedText += this.fullText.charAt(this.typingIndex);
+      this.typingIndex++;
+      this.typingTimeout = setTimeout(this.typeNextChar, this.typingSpeed);
     },
     
     // 头像点击彩蛋
@@ -200,7 +243,7 @@ export default {
       clearTimeout(this.easterEggTimeout);
     }
   }
-}
+};
 </script>
 
 <style scoped lang="scss">

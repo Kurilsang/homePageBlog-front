@@ -9,8 +9,21 @@
     
     <!-- 文章列表 -->
     <div class="rpg-menu-box article-list-box" :class="{'appear': isVisible}">
-      <h2 class="section-title">全部文章 ({{ articles.length }})</h2>
+      <h2 class="section-title">全部文章 <span v-if="!loading">({{ articles.length }})</span></h2>
       
+      <!-- 加载中状态 -->
+      <div v-if="loading" class="loading-state">
+        <p>正在加载文章...</p>
+      </div>
+      
+      <!-- 错误状态 -->
+      <div v-else-if="error" class="error-state">
+        <p>{{ errorMessage }}</p>
+        <button class="rpg-button" @click="loadArticles">重试</button>
+      </div>
+      
+      <!-- 文章内容区域 -->
+      <template v-else>
       <div class="article-filters">
         <div class="search-box">
           <input 
@@ -82,6 +95,7 @@
         <p v-if="articles.length === 0">暂无文章</p>
         <p v-else>没有符合条件的文章</p>
       </div>
+      </template>
       
       <div class="pixel-corner top-left"></div>
       <div class="pixel-corner top-right"></div>
@@ -92,7 +106,7 @@
 </template>
 
 <script>
-import store from '@/store';
+import { articleAPI } from '@/api';
 
 export default {
   name: 'AdminArticlesView',
@@ -101,15 +115,13 @@ export default {
       isVisible: false,
       searchQuery: '',
       showPinnedOnly: false,
-      storeInstance: store.getStore()
+      articles: [],
+      loading: true,
+      error: false,
+      errorMessage: '加载文章失败'
     };
   },
   computed: {
-    // 获取所有文章
-    articles() {
-      return this.storeInstance.getArticles();
-    },
-    
     // 过滤后的文章
     filteredArticles() {
       let result = [...this.articles];
@@ -120,7 +132,7 @@ export default {
         result = result.filter(article => 
           article.title.toLowerCase().includes(query) || 
           article.summary.toLowerCase().includes(query) ||
-          article.tag.toLowerCase().includes(query)
+          (article.tag && article.tag.toLowerCase().includes(query))
         );
       }
       
@@ -138,28 +150,75 @@ export default {
       return result;
     }
   },
-  mounted() {
+  async mounted() {
     // 组件挂载后等待200ms再开始动画
     setTimeout(() => {
       this.isVisible = true;
     }, 200);
+    
+    // 加载文章数据
+    await this.loadArticles();
   },
   methods: {
+    // 加载文章列表
+    async loadArticles() {
+      this.loading = true;
+      this.error = false;
+      
+      try {
+        const response = await articleAPI.getArticles({
+          page: 1,
+          pageSize: 100  // 管理页面加载更多文章
+        });
+        
+        if (response && response.articles) {
+          this.articles = response.articles;
+        } else {
+          throw new Error('获取文章失败');
+        }
+      } catch (error) {
+        console.error('加载文章列表失败:', error);
+        this.error = true;
+        this.errorMessage = error.message || '加载文章失败，请稍后重试';
+      } finally {
+        this.loading = false;
+      }
+    },
+    
     // 切换置顶过滤
     togglePinnedFilter() {
       this.showPinnedOnly = !this.showPinnedOnly;
     },
     
     // 切换文章置顶状态
-    togglePinned(article) {
-      const newState = !article.isPinned;
-      this.storeInstance.setPinned(article.id, newState);
+    async togglePinned(article) {
+      try {
+        const newPinnedState = !article.isPinned;
+        await articleAPI.toggleArticlePin(article.id, newPinnedState);
+        
+        // 更新本地状态
+        const index = this.articles.findIndex(a => a.id === article.id);
+        if (index !== -1) {
+          this.articles[index].isPinned = newPinnedState;
+        }
+      } catch (error) {
+        console.error('切换文章置顶状态失败:', error);
+        alert('切换置顶状态失败，请稍后重试');
+      }
     },
     
     // 确认删除文章
-    confirmDelete(article) {
+    async confirmDelete(article) {
       if (confirm(`确定要删除文章 "${article.title}" 吗？此操作不可恢复。`)) {
-        this.storeInstance.deleteArticle(article.id);
+        try {
+          await articleAPI.deleteArticle(article.id);
+          
+          // 从本地数组中移除文章
+          this.articles = this.articles.filter(a => a.id !== article.id);
+        } catch (error) {
+          console.error('删除文章失败:', error);
+          alert('删除文章失败，请稍后重试');
+        }
       }
     }
   }
@@ -206,7 +265,22 @@ export default {
   border-radius: 2px;
   opacity: 0;
   transform: translateY(20px);
-  transition: all 0.3s ease;
+  transition: all 0.5s ease;
+}
+
+/* 加载和错误状态 */
+.loading-state, .error-state {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-color);
+  background-color: rgba(20, 20, 80, 0.6);
+  border-radius: 2px;
+  margin: 20px 0;
+}
+
+.error-state .rpg-button {
+  margin-top: 10px;
+  background-color: rgba(58, 142, 169, 0.3);
 }
 
 .appear {
@@ -215,10 +289,10 @@ export default {
 }
 
 .section-title {
-  font-size: 18px;
   color: var(--highlight-color);
-  margin: 0 0 20px 0;
-  padding-bottom: 10px;
+  font-size: 20px;
+  margin-bottom: 20px;
+  padding-bottom: 8px;
   border-bottom: var(--pixel-size) solid var(--highlight-color);
 }
 

@@ -7,96 +7,114 @@
       </button>
     </div>
     
-    <!-- 文章详情框 -->
-    <div class="rpg-menu-box article-detail-box" :class="{'appear': isVisible}">
-      <!-- 文章封面区域 -->
-      <div class="article-header">
-        <div class="article-cover-wrapper">
-          <img :src="article.coverImage" :alt="article.title" class="article-cover">
-          <div class="article-meta">
-            <span class="article-date">{{ article.date }}</span>
-            <span class="pixel-tag" v-if="article.tag">{{ article.tag }}</span>
+    <!-- 加载中状态 -->
+    <div v-if="loading" class="loading-state">
+      <p>正在加载文章...</p>
+    </div>
+    
+    <!-- 错误状态 -->
+    <div v-else-if="error" class="error-state">
+      <p>{{ errorMessage }}</p>
+      <button class="rpg-button" @click="fetchArticleData">重试</button>
+    </div>
+    
+    <!-- 文章内容 -->
+    <template v-else>
+      <!-- 文章详情框 -->
+      <div class="rpg-menu-box article-detail-box" :class="{'appear': isVisible}">
+        <!-- 文章封面区域 -->
+        <div class="article-header">
+          <div class="article-cover-wrapper">
+            <img :src="article.coverImage" :alt="article.title" class="article-cover">
+            <div class="article-meta">
+              <span class="article-date">{{ article.date }}</span>
+              <span class="pixel-tag" v-if="article.tag">{{ article.tag }}</span>
+            </div>
           </div>
         </div>
-      </div>
-      
-      <!-- 文章标题和内容区域 -->
-      <div class="article-content">
-        <h1 class="article-title">{{ article.title }}</h1>
-        <div class="article-body" v-html="article.content"></div>
         
-        <!-- 文章标签区域 -->
-        <div class="article-tags" v-if="article.keywords && article.keywords.length > 0">
-          <span class="tag-label">关键字：</span>
-          <div class="tags-container">
-            <span v-for="(keyword, idx) in article.keywords" :key="idx" class="article-keyword">
-              {{ keyword }}
-            </span>
+        <!-- 文章标题和内容区域 -->
+        <div class="article-content">
+          <h1 class="article-title">{{ article.title }}</h1>
+          <div class="article-body" v-html="article.content"></div>
+          
+          <!-- 文章标签区域 -->
+          <div class="article-tags" v-if="article.keywords && article.keywords.length > 0">
+            <span class="tag-label">关键字：</span>
+            <div class="tags-container">
+              <span v-for="(keyword, idx) in article.keywords" :key="idx" class="article-keyword">
+                {{ keyword }}
+              </span>
+            </div>
           </div>
         </div>
+        
+        <!-- 像素角落装饰 -->
+        <div class="pixel-corner top-left"></div>
+        <div class="pixel-corner top-right"></div>
+        <div class="pixel-corner bottom-left"></div>
+        <div class="pixel-corner bottom-right"></div>
       </div>
       
-      <!-- 像素角落装饰 -->
-      <div class="pixel-corner top-left"></div>
-      <div class="pixel-corner top-right"></div>
-      <div class="pixel-corner bottom-left"></div>
-      <div class="pixel-corner bottom-right"></div>
-    </div>
-    
-    <!-- 相关文章区域 -->
-    <div class="rpg-menu-box related-articles-box" :class="{'appear': isVisible}" v-if="relatedArticles.length > 0">
-      <h2 class="rpg-heading related-heading">相关文章</h2>
-      <div class="related-articles-list">
-        <div 
-          v-for="(relArticle, index) in relatedArticles" 
-          :key="relArticle.id" 
-          class="related-article-item"
-          :style="{ 'animation-delay': `${0.6 + index * 0.1}s` }"
-          @click="goToArticle(relArticle.id)">
-          <div class="related-article-cover">
-            <img :src="relArticle.coverImage" :alt="relArticle.title">
+      <!-- 相关文章区域 -->
+      <div class="rpg-menu-box related-articles-box" :class="{'appear': isVisible}" v-if="relatedArticles.length > 0">
+        <h2 class="rpg-heading related-heading">相关文章</h2>
+        <div class="related-articles-list">
+          <div 
+            v-for="(relArticle, index) in relatedArticles" 
+            :key="relArticle.id" 
+            class="related-article-item"
+            :style="{ 'animation-delay': `${0.6 + index * 0.1}s` }"
+            @click="goToArticle(relArticle.id)">
+            <div class="related-article-cover">
+              <img :src="relArticle.coverImage" :alt="relArticle.title">
+            </div>
+            <div class="related-article-info">
+              <h3 class="related-article-title">{{ relArticle.title }}</h3>
+              <p class="related-article-date">{{ relArticle.date }}</p>
+            </div>
+            <div class="pixel-tag" v-if="relArticle.tag">{{ relArticle.tag }}</div>
           </div>
-          <div class="related-article-info">
-            <h3 class="related-article-title">{{ relArticle.title }}</h3>
-            <p class="related-article-date">{{ relArticle.date }}</p>
-          </div>
-          <div class="pixel-tag" v-if="relArticle.tag">{{ relArticle.tag }}</div>
         </div>
+        
+        <!-- 像素角落装饰 -->
+        <div class="pixel-corner top-left"></div>
+        <div class="pixel-corner top-right"></div>
+        <div class="pixel-corner bottom-left"></div>
+        <div class="pixel-corner bottom-right"></div>
       </div>
       
-      <!-- 像素角落装饰 -->
-      <div class="pixel-corner top-left"></div>
-      <div class="pixel-corner top-right"></div>
-      <div class="pixel-corner bottom-left"></div>
-      <div class="pixel-corner bottom-right"></div>
-    </div>
-    
-    <!-- 评论区域 -->
-    <div class="rpg-menu-box comments-box" :class="{'appear': isVisible}" style="animation-delay: 0.7s">
-      <h2 class="rpg-heading comments-heading">
-        文章评论
-        <span class="comments-count" v-if="comments.length > 0">({{ comments.length }})</span>
-      </h2>
-      
-      <!-- 评论表单 -->
-      <comment-form 
-        :article-id="id" 
-        @submit="handleCommentSubmit"
-      />
-      
-      <!-- 评论列表 -->
-      <comment-list 
-        :comments="comments" 
-        :article-id="id" 
-        @reply="handleCommentSubmit"
-      />
-      
-      <!-- 像素角落装饰 -->
-      <div class="pixel-corner top-left"></div>
-      <div class="pixel-corner top-right"></div>
-      <div class="pixel-corner bottom-left"></div>
-      <div class="pixel-corner bottom-right"></div>
-    </div>
+      <!-- 评论区域 -->
+      <div class="rpg-menu-box comments-box" :class="{'appear': isVisible}" style="animation-delay: 0.7s">
+        <h2 class="rpg-heading comments-heading">
+          文章评论
+          <span class="comments-count" v-if="comments.length > 0">({{ comments.length }})</span>
+        </h2>
+        
+        <!-- 评论表单 -->
+        <comment-form 
+          :article-id="id" 
+          @submit="handleCommentSubmit"
+        />
+        
+        <!-- 评论列表 -->
+        <div v-if="loadingComments" class="comment-loading">
+          加载评论中...
+        </div>
+        <comment-list 
+          v-else
+          :comments="comments" 
+          :article-id="id" 
+          @reply="handleCommentSubmit"
+        />
+        
+        <!-- 像素角落装饰 -->
+        <div class="pixel-corner top-left"></div>
+        <div class="pixel-corner top-right"></div>
+        <div class="pixel-corner bottom-left"></div>
+        <div class="pixel-corner bottom-right"></div>
+      </div>
+    </template>
     
     <!-- 音乐播放器组件 -->
     <MusicPlayerComponent />
@@ -107,7 +125,7 @@
 import MusicPlayerComponent from '../components/MusicPlayerComponent.vue';
 import CommentList from '../components/comments/CommentList.vue';
 import CommentForm from '../components/comments/CommentForm.vue';
-import store from '../store';
+import { articleAPI, commentAPI } from '@/api';
 
 export default {
   name: 'ArticleView',
@@ -136,17 +154,15 @@ export default {
         keywords: []
       },
       relatedArticles: [],
-      storeInstance: store.getStore()
+      comments: [],
+      loading: true,
+      loadingComments: true,
+      error: false,
+      errorMessage: '加载文章失败，请稍后重试'
     };
   },
-  computed: {
-    // 获取文章对应评论
-    comments() {
-      return this.storeInstance.getCommentsByArticleId(parseInt(this.id));
-    }
-  },
   created() {
-    this.fetchArticleData(this.id);
+    this.fetchArticleData();
   },
   mounted() {
     // 组件挂载后等待200ms再开始动画
@@ -155,20 +171,53 @@ export default {
     }, 200);
   },
   methods: {
-    fetchArticleData(id) {
-      // 从store获取文章数据
-      const article = this.storeInstance.getArticleById(parseInt(id));
+    async fetchArticleData() {
+      this.loading = true;
+      this.error = false;
       
-      if (article) {
+      try {
+        // 获取文章详情
+        const article = await articleAPI.getArticleById(this.id);
         this.article = article;
         
-        // 获取相关文章（除了当前文章的其他文章）
-        this.relatedArticles = this.storeInstance.getArticles()
-          .filter(a => a.id !== parseInt(id))
-          .slice(0, 2);
-      } else {
-        // 文章不存在，可以重定向到首页或显示错误
-        this.$router.push('/');
+        // 获取相关文章
+        const articlesResponse = await articleAPI.getArticles({
+          page: 1,
+          pageSize: 3
+        });
+        
+        if (articlesResponse && articlesResponse.articles) {
+          this.relatedArticles = articlesResponse.articles
+            .filter(a => a.id !== parseInt(this.id))
+            .slice(0, 2);
+        }
+        
+        // 获取评论
+        await this.fetchComments();
+      } catch (error) {
+        console.error('获取文章详情失败:', error);
+        this.error = true;
+        this.errorMessage = '加载文章失败，请稍后重试';
+      } finally {
+        this.loading = false;
+      }
+    },
+    
+    async fetchComments() {
+      this.loadingComments = true;
+      
+      try {
+        const commentsResponse = await commentAPI.getArticleComments(this.id);
+        if (commentsResponse && commentsResponse.comments) {
+          this.comments = commentsResponse.comments;
+        } else {
+          this.comments = [];
+        }
+      } catch (error) {
+        console.error('获取评论失败:', error);
+        this.comments = [];
+      } finally {
+        this.loadingComments = false;
       }
     },
     
@@ -195,15 +244,22 @@ export default {
     },
     
     // 处理评论提交
-    handleCommentSubmit(commentData) {
-      // 评论已经在CommentForm组件中添加到了store
-      // 这里可以做额外处理，例如滚动到评论区顶部等
-      console.log('Comment submitted:', commentData);
+    async handleCommentSubmit(commentData) {
+      try {
+        await commentAPI.addComment(commentData);
+        // 评论提交后重新获取评论列表
+        await this.fetchComments();
+      } catch (error) {
+        console.error('提交评论失败:', error);
+      }
     }
   },
   watch: {
-    id(newId) {
-      this.fetchArticleData(newId);
+    id: {
+      handler() {
+        this.fetchArticleData();
+      },
+      immediate: true
     }
   }
 }
@@ -217,6 +273,25 @@ export default {
 
 .back-button-container {
   margin-bottom: 15px;
+}
+
+/* 加载和错误状态样式 */
+.loading-state, .error-state, .comment-loading {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-color);
+  background-color: rgba(16, 15, 75, 0.8);
+  border: var(--border-width) solid var(--highlight-color);
+  border-radius: 2px;
+  margin-bottom: 20px;
+}
+
+.comment-loading {
+  padding: 15px;
+  background-color: rgba(12, 11, 60, 0.6);
+  border: var(--pixel-size) solid var(--highlight-color);
+  margin-top: 15px;
+  font-size: 14px;
 }
 
 .rpg-button {
@@ -278,7 +353,8 @@ export default {
   width: 100%;
   height: 250px;
   overflow: hidden;
-  border: var(--pixel-size) solid var(--highlight-color);
+  border: var(--border-width) solid var(--highlight-color);
+  margin-bottom: 15px;
 }
 
 .article-cover {
