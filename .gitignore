@@ -2,7 +2,8 @@
 node_modules
 /dist
 /src/temp
-
+/src/temp/db.sql
+/src/temp/接口文档.md
 # local env files
 .env.local
 .env.*.local
